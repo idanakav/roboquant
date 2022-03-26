@@ -345,9 +345,9 @@ class ZonedPeriod(private val a: TemporalAmount, private val zoneId: ZoneId = Co
 
     fun toDays() = a.get(ChronoUnit.DAYS)
 
-    fun toHours() = a.get(ChronoUnit.HOURS)
+    fun toHours() = (a as Duration).toHours()
 
-    fun toMinutes() = a.get(ChronoUnit.MINUTES)
+    fun toMinutes() = (a as Duration).toMinutes()
 
 
     override fun addTo(temporal: Temporal): Temporal {
