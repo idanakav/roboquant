@@ -16,14 +16,15 @@
 
 package org.roboquant.jupyter
 
+import com.google.gson.JsonObject
 import org.roboquant.brokers.Trade
-import org.roboquant.common.Amount
-import org.roboquant.common.Asset
-import org.roboquant.common.Timeframe
-import org.roboquant.common.asQuantity
+import org.roboquant.common.*
 import org.roboquant.feeds.Feed
 import org.roboquant.feeds.PriceBar
 import org.roboquant.feeds.filter
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * Plot the price-bars (candlesticks) of an asset found in a [feed] and optionally the [trades] made for that same
@@ -33,32 +34,57 @@ import org.roboquant.feeds.filter
  * By default, the chart will use a linear timeline, meaning gaps like a weekend will show-up. this can be disabled
  * by setting [useTime] to false.
  */
+
+interface PriceBarChartDataProvider {
+    fun provide(
+        timeframe: Timeframe,
+        asset: Asset,
+        useTime: Boolean,
+        indicators: List<PriceBarChart.Indicator>
+    ): List<List<Any>>
+}
+
+class FeedChartDataProvider(private val feed: Feed) : PriceBarChartDataProvider {
+    override fun provide(
+        timeframe: Timeframe,
+        asset: Asset,
+        useTime: Boolean,
+        indicators: List<PriceBarChart.Indicator>
+    ): List<List<Any>> {
+        val entries = feed.filter<PriceBar>(timeframe) { it.asset == asset }
+        val data = entries.mapIndexed { index, it ->
+            val (now, price) = it
+            val direction = if (price.close >= price.open) 1 else -1
+            val time = if (useTime) now else now.atZone(Config.defaultZoneId).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+
+            buildList<Any> {
+                addAll(listOf(time, price.open, price.high, price.low, price.close, price.volume, direction))
+                indicators.forEach {
+                    val offset = entries.size - it.values.size
+                    if(index < offset) {
+                        add("-")
+                    } else {
+                        add(it.values[index - offset])
+                    }
+                }
+            }
+        }
+        return data
+    }
+}
+
 class PriceBarChart(
-    private val feed: Feed,
+    private val dataProvider: PriceBarChartDataProvider,
     private val asset: Asset,
     private val trades: Collection<Trade> = emptyList(),
     private val timeframe: Timeframe = Timeframe.INFINITE,
-    private val useTime: Boolean = true
+    private val useTime: Boolean = true,
+    private val indicators: List<Indicator> = emptyList(),
 ) : Chart() {
 
 
     init {
         height = 700
-    }
-
-    /**
-     * Play a feed and filter the provided asset for price bar data. The output is suitable for candle stock charts
-     * @return
-     */
-    private fun fromFeed(): List<List<Any>> {
-        val entries = feed.filter<PriceBar>(timeframe) { it.asset == asset }
-        val data = entries.map {
-            val (now, price) = it
-            val direction = if (price.close >= price.open) 1 else -1
-            val time = if (useTime) now else now.toString()
-            listOf(time, price.open, price.high, price.low, price.close, price.volume, direction)
-        }
-        return data
     }
 
     /**
@@ -68,23 +94,106 @@ class PriceBarChart(
         val t = trades.filter { it.asset == asset && timeframe.contains(it.time) }
         val d = mutableListOf<Map<String, Any>>()
         for (trade in t) {
-            val time = if (useTime) trade.time else trade.time.toString()
+            val time = if (useTime) trade.time else trade.time.atZone(Config.defaultZoneId).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
             val price = Amount(asset.currency, trade.price).toBigDecimal()
+            val styleJsonObject = JsonObject()
             val entry = mapOf(
-                "value" to trade.quantity.asQuantity, "xAxis" to time, "yAxis" to price
+                "value" to trade.quantity.asQuantity,
+                "xAxis" to time,
+                "yAxis" to price,
+                "itemStyle" to styleJsonObject.apply {
+                    val color = when {
+                        trade.pnlValue == 0.0 -> "rgb(0,205,50)"
+                        trade.pnlValue <= 0.0 -> "rgb(220,20,60)"
+                        else -> "rgb(46,139,87)"
+                    }
+                    addProperty("color", color)
+                },
+                "orderId" to trade.orderId,
             )
             d.add(entry)
         }
         return d
     }
 
+    override fun renderCustomData(): String {
+        val trades = trades.filter { it.asset == asset && timeframe.contains(it.time) }
+
+        val headers = {
+            val headersCells = listOf("ID", "Side", "Time", "Price", "Quantity", "P&L")
+                .joinToString(separator = "\n") {
+                """
+                <th scope="col" class="text-sm font-medium text-gray-900 px-6 py-4 text-left">
+                    $it
+                </th>
+                """
+            .trimIndent()
+            }
+            """
+            <thead class="bg-white border-b">
+              <tr>
+                $headersCells
+              </tr>
+            </thead>
+            """.trimIndent()
+        }
+
+        val tradeRows = {
+            trades.joinToString(separator = "\n") {
+                val side = if (it.pnlValue == 0.0) "BUY" else "SELL"
+                val time = it.time.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofLocalizedDateTime(
+                    FormatStyle.MEDIUM))
+                val price = it.priceAmount
+                val quantity = it.quantity
+                val pnlText = if(side == "BUY") "-" else it.pnl
+                val pnlTextColor = if(side == "BUY") "gray" else if(it.pnlValue < 0) "red" else "green"
+            """
+                <tr class="bg-white border-b transition duration-300 ease-in-out hover:bg-gray-100">
+                  <td class="text-sm text-gray-900 font-light px-6 py-4 whitespace-nowrap">
+                    ${it.orderId}
+                  </td>
+                  <td class="text-sm text-gray-900 font-light px-6 py-4 whitespace-nowrap">
+                    $side
+                  </td>
+                  <td class="text-sm text-gray-900 font-light px-6 py-4 whitespace-nowrap">
+                    $time
+                  </td>
+                  <td class="text-sm text-gray-900 font-light px-6 py-4 whitespace-nowrap">
+                    $price
+                  </td>
+                  <td class="text-sm text-gray-900 font-light px-6 py-4 whitespace-nowrap">
+                    $quantity
+                  </td>
+                  <td class="text-sm text-$pnlTextColor-400 px-6 py-4 whitespace-nowrap">
+                    $pnlText
+                  </td>
+                </tr>
+                }
+                """.trimIndent()
+            }
+        }
+        return """
+             <div class="flex flex-col px-48">
+              <div class="overflow-x-auto sm:-mx-6 lg:-mx-8">
+                <div class="py-2 inline-block min-w-full sm:px-6 lg:px-8">
+                  <div class="overflow-hidden">
+                    <table class="min-w-full">
+                    ${headers()}
+                    ${tradeRows()}
+                    </table>
+                  </div>
+                </div>
+              </div>
+             </div>            
+        """.trimIndent()
+    }
+
     /** @suppress */
     override fun renderOption(): String {
 
-        val line = reduce(fromFeed())
+        val line = reduce(dataProvider.provide(timeframe, asset, useTime, indicators))
         val lineData = gsonBuilder.create().toJson(line)
-        val timeframe = if (line.size > 1) Timeframe.parse(line.first()[0].toString(), line.last()[0].toString())
-            .toString() else ""
+        val timeframe = ""
 
         val marks = markPoints()
         val markData = gsonBuilder.create().toJson(marks)
@@ -223,10 +332,32 @@ class PriceBarChart(
                             x: 0,
                             y: 5
                         }
-                    }
+                    },
+                    ${renderIndicators()}
                 ]
                 };
                 """.trimIndent()
     }
 
+    private fun renderIndicators(): String {
+        val gson = gsonBuilder.setPrettyPrinting().create()
+        val elements = indicators.mapIndexed { index, it ->
+            val indicatorElement = gson.toJsonTree(it)
+            val encode = JsonObject()
+            encode.addProperty("x", 0)
+            encode.addProperty("y", index + 7)
+
+            indicatorElement.asJsonObject.add("encode", encode)
+            indicatorElement.asJsonObject.remove("data")
+            return@mapIndexed indicatorElement
+        }
+        return elements.joinToString(",\n") {
+            gson.toJson(it)
+        }
+    }
+
+    data class Indicator(
+        val name: String,
+        val values: List<Double>,
+    )
 }

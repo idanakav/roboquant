@@ -439,6 +439,9 @@ fun main() {
     }
     sb1 += "}\n\n"
     val file1 = File("/tmp/TA.kt")
+    if(!file1.exists()) {
+        file1.createNewFile()
+    }
     file1.writeText(sb1.toString())
 
     // And now the TALibBatch object

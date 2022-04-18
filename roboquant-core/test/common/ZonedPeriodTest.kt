@@ -1,8 +1,6 @@
 package org.roboquant.common
 
-import org.junit.Test
-import kotlin.test.assertEquals
-
+import kotlin.test.*
 class ZonedPeriodTest {
 
     @Test

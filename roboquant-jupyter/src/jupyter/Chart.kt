@@ -18,10 +18,7 @@
 
 package org.roboquant.jupyter
 
-import com.google.gson.GsonBuilder
-import com.google.gson.JsonElement
-import com.google.gson.JsonSerializationContext
-import com.google.gson.JsonSerializer
+import com.google.gson.*
 import org.roboquant.common.Amount
 import java.lang.reflect.Type
 import java.time.Instant
@@ -102,6 +99,28 @@ private class TripleAdapter : JsonSerializer<Triple<*, *, *>> {
 }
 
 /**
+ * Type adaptor for Gson that allows to use Amount that get serialized as a big decimal
+ *
+ * @constructor Create new Pair adapter
+ */
+private class IndicatorAdapter : JsonSerializer<PriceBarChart.Indicator> {
+
+    override fun serialize(
+        jsonElement: PriceBarChart.Indicator,
+        type: Type,
+        jsonSerializationContext: JsonSerializationContext
+    ): JsonElement {
+       return JsonObject().apply {
+            addProperty("name", jsonElement.name)
+            addProperty("type", "line")
+            addProperty("smooth", true)
+            add("data", jsonSerializationContext.serialize(jsonElement.values))
+        }
+    }
+
+}
+
+/**
  * Base class for ECharts based charts
  *
  * @constructor Create empty E chart
@@ -137,6 +156,7 @@ abstract class Chart : Output() {
             gsonBuilder.registerTypeAdapter(Triple::class.java, TripleAdapter())
             gsonBuilder.registerTypeAdapter(Instant::class.java, InstantAdapter())
             gsonBuilder.registerTypeAdapter(Amount::class.java, AmountAdapter())
+            gsonBuilder.registerTypeAdapter(PriceBarChart.Indicator::class.java, IndicatorAdapter())
         }
 
     }
@@ -166,7 +186,6 @@ abstract class Chart : Output() {
 
         return """
         <div style="width:100%;height:${height}px;" class="rqcharts"></div>
-        
         <script type="text/javascript">
             (function () {
                 let elem = document.currentScript.previousElementSibling;
@@ -182,13 +201,26 @@ abstract class Chart : Output() {
                 call_echarts(fn)        
             })()
         </script>
+        ${renderCustomData()}
         """.trimIndent()
     }
 
+/*
+    var markPointTooltipVisibilityHandler = function (event) {
+        const element = document.getElementById("extra");
+        const show = event.type === "mousemove" && event.componentType === 'markPoint' ? true : false;
+        element.className = show ? '' : 'hidden';
+    };
+    myChart.on('mousemove', markPointTooltipVisibilityHandler);
+    myChart.on('mouseout', markPointTooltipVisibilityHandler);
+*/
 
     override fun asHTMLPage(): String {
         val fragment = asHTML()
-        val script = """<script src='https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js'></script>"""
+        val script = """
+            <script src='https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js'></script>
+            <script src="https://cdn.tailwindcss.com"></script>
+            """.trimIndent()
 
         return """
         <html>
@@ -206,6 +238,12 @@ abstract class Chart : Output() {
                 $fragment
             </body>
         </html>
+        """.trimIndent()
+    }
+
+    protected open fun renderCustomData(): String {
+        return """
+            <div></div>
         """.trimIndent()
     }
 

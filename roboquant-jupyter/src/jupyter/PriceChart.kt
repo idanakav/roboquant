@@ -16,6 +16,7 @@
 
 package org.roboquant.jupyter
 
+import com.google.gson.JsonObject
 import org.roboquant.brokers.Trade
 import org.roboquant.common.Asset
 import org.roboquant.common.Timeframe
@@ -54,8 +55,19 @@ class PriceChart(
         val t = trades.filter { it.asset == asset && timeframe.contains(it.time) }
         val result = mutableListOf<Map<String, Any>>()
         for (trade in t) {
+            val styleJsonObject = JsonObject()
             val entry = mapOf(
-                "value" to trade.quantity.toInt(), "xAxis" to trade.time, "yAxis" to trade.priceAmount.toBigDecimal()
+                "value" to trade.quantity.toInt(),
+                "xAxis" to trade.time,
+                "yAxis" to trade.priceAmount.toBigDecimal(),
+                "itemStyle" to styleJsonObject.apply {
+                    val color = when {
+                        trade.pnlValue == 0.0 -> "'rgb(0,205,50)'"
+                        trade.pnlValue <= 0.0 -> "'rgb(220,20,60)'"
+                        else -> "'rgb(46,139,87)'"
+                    }
+                    addProperty("color", color)
+                }
             )
             result.add(entry)
         }
