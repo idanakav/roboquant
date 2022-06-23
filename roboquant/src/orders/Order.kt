@@ -67,5 +67,12 @@ abstract class Order(val asset: Asset, val id: Int, val tag: String = "") {
 
 }
 
-
-
+/**
+ * Describes the side of the order, either entry or exit.
+ */
+enum class Side {
+    /** Order to enter a new position */
+    ENTER,
+    /** Order to exit an existing position */
+    EXIT
+}

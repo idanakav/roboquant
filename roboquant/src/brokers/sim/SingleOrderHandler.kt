@@ -4,6 +4,8 @@ import org.roboquant.common.Size
 import org.roboquant.common.UnsupportedException
 import org.roboquant.common.days
 import org.roboquant.orders.*
+import org.roboquant.orders.Side.ENTER
+import org.roboquant.orders.Side.EXIT
 import java.time.Instant
 
 abstract class SingleOrderHandler<T : SingleOrder>(var order: T) : TradeOrderHandler {
@@ -57,15 +59,22 @@ internal class MarketOrderHandler(order: MarketOrder) : SingleOrderHandler<Marke
 }
 
 
-private fun stopTrigger(stop: Double, size: Size, pricing: Pricing): Boolean {
+private fun stopTrigger(stop: Double, size: Size, pricing: Pricing, side: Side = ENTER): Boolean {
     return if (size < 0.0) pricing.lowPrice(size) <= stop
     else pricing.highPrice(size) >= stop
 }
 
-
-private fun limitTrigger(limit: Double, size: Size, pricing: Pricing): Boolean {
-    return if (size < 0.0) pricing.highPrice(size) >= limit
-    else pricing.lowPrice(size) <= limit
+private fun limitTrigger(limit: Double, size: Size, pricing: Pricing, side: Side): Boolean {
+    return when(side) {
+        ENTER,  -> {
+            if (size < 0.0) pricing.highPrice(size) >= limit
+            else pricing.lowPrice(size) <= limit
+        }
+        EXIT -> {
+            if (size < 0.0) pricing.highPrice(size) >= limit
+            else pricing.lowPrice(size) <= limit
+        }
+    }
 }
 
 
@@ -90,7 +99,7 @@ private fun getTrailStop(oldStop: Double, trail: Double, size: Size, pricing: Pr
 internal class LimitOrderHandler(order: LimitOrder) : SingleOrderHandler<LimitOrder>(order) {
 
     override fun fill(pricing: Pricing): Execution? {
-        return if (limitTrigger(order.limit, remaining, pricing)) {
+        return if (limitTrigger(order.limit, remaining, pricing, order.side)) {
             Execution(order, remaining, order.limit)
         } else {
             null
@@ -102,7 +111,7 @@ internal class LimitOrderHandler(order: LimitOrder) : SingleOrderHandler<LimitOr
 internal class StopOrderHandler(order: StopOrder) : SingleOrderHandler<StopOrder>(order) {
 
     override fun fill(pricing: Pricing): Execution? {
-        if (stopTrigger(order.stop, remaining, pricing)) return Execution(
+        if (stopTrigger(order.stop, remaining, pricing, order.side)) return Execution(
             order, remaining, pricing.marketPrice(remaining)
         )
         return null
@@ -116,8 +125,8 @@ internal class StopLimitOrderHandler(order: StopLimitOrder) : SingleOrderHandler
     private var stopTriggered = false
 
     override fun fill(pricing: Pricing): Execution? {
-        if (!stopTriggered) stopTriggered = stopTrigger(order.stop, remaining, pricing)
-        if (stopTriggered && limitTrigger(order.limit, remaining, pricing)) return Execution(
+        if (!stopTriggered) stopTriggered = stopTrigger(order.stop, remaining, pricing, order.side)
+        if (stopTriggered && limitTrigger(order.limit, remaining, pricing ,order.side)) return Execution(
             order,
             remaining,
             order.limit
@@ -152,7 +161,7 @@ internal class TrailLimitOrderHandler(order: TrailLimitOrder) : SingleOrderHandl
         stop = getTrailStop(stop, order.trailPercentage, remaining, pricing)
         if (! stopTriggered) stopTriggered = stopTrigger(stop, remaining, pricing)
         val limit = stop + order.limitOffset
-        return if (stopTriggered && limitTrigger(limit, remaining, pricing)) Execution(order, remaining, limit)
+        return if (stopTriggered && limitTrigger(limit, remaining, pricing, ENTER)) Execution(order, remaining, limit)
         else null
     }
 

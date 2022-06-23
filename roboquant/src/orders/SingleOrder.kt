@@ -26,8 +26,14 @@ import org.roboquant.common.Size
  * @property size the size of the order
  * @property tif the Time In Force policy to use
  */
-abstract class SingleOrder(asset: Asset, val size: Size, val tif: TimeInForce, id: Int, tag: String = "") :
-    Order(asset, id, tag) {
+abstract class SingleOrder(
+    asset: Asset,
+    val size: Size,
+    val tif: TimeInForce,
+    id: Int,
+    tag: String = "",
+    val side: Side = Side.ENTER
+) : Order(asset, id, tag) {
 
 
     init {
@@ -52,6 +58,9 @@ abstract class SingleOrder(asset: Asset, val size: Size, val tif: TimeInForce, i
     val direction
         get() = if (buy) 1 else -1
 
+    val isEnter
+        get() = side == Side.ENTER
+
 }
 
 /**
@@ -69,8 +78,9 @@ class MarketOrder(
     size: Size,
     tif: TimeInForce = GTC(),
     id: Int = nextId(),
-    tag: String = ""
-) : SingleOrder(asset, size, tif, id, tag) {
+    tag: String = "",
+    side: Side = Side.ENTER,
+) : SingleOrder(asset, size, tif, id, tag, side) {
 
     constructor(asset: Asset, quantity: Int) : this(asset, Size(quantity))
 
@@ -96,8 +106,9 @@ class LimitOrder(
     val limit: Double,
     tif: TimeInForce = GTC(),
     id: Int = nextId(),
-    tag: String = ""
-) : SingleOrder(asset, size, tif, id, tag) {
+    tag: String = "",
+    side: Side = Side.ENTER,
+) : SingleOrder(asset, size, tif, id, tag, side) {
 
     override fun info() = sortedMapOf("quantity" to size, "limit" to limit, "tif" to tif)
 
@@ -119,8 +130,9 @@ class StopOrder(
     val stop: Double,
     tif: TimeInForce = GTC(),
     id: Int = nextId(),
-    tag: String = ""
-) : SingleOrder(asset, size, tif, id, tag) {
+    tag: String = "",
+    side: Side = Side.ENTER,
+) : SingleOrder(asset, size, tif, id, tag, side) {
 
     override fun info() = sortedMapOf("quantity" to size, "stop" to stop, "tif" to tif)
 }
@@ -143,8 +155,9 @@ class StopLimitOrder(
     val limit: Double,
     tif: TimeInForce = GTC(),
     id: Int = nextId(),
-    tag: String = ""
-) : SingleOrder(asset, size, tif, id, tag) {
+    tag: String = "",
+    side: Side = Side.ENTER,
+) : SingleOrder(asset, size, tif, id, tag, side) {
 
     override fun info() = sortedMapOf("quantity" to size, "stop" to stop, "limit" to limit, "tif" to tif)
 }
@@ -165,8 +178,9 @@ open class TrailOrder(
     val trailPercentage: Double,
     tif: TimeInForce = GTC(),
     id: Int = nextId(),
-    tag: String = ""
-) : SingleOrder(asset, size, tif, id, tag) {
+    tag: String = "",
+    side: Side = Side.ENTER,
+) : SingleOrder(asset, size, tif, id, tag, side) {
 
     init {
         require(trailPercentage > 0.0) { "trail percentage should be a positive value" }

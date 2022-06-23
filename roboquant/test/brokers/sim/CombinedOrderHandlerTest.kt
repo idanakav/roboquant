@@ -88,6 +88,42 @@ internal class CombinedOrderHandlerTest {
 
     }
 
+    @Test
+    fun `bracket short with loss`() {
+        val entry = MarketOrder(asset, Size(-50), side = Side.ENTER)
+        val profit = LimitOrder(asset,  Size(-50), 95.0, side = Side.EXIT)
+        val loss = StopOrder(asset,  Size(-50), 105.0, side = Side.EXIT)
+        val order = BracketOrder(entry, profit, loss)
+        val cmd = BracketOrderHandler(order)
 
+        var executions = cmd.execute(pricing(100), Instant.now())
+        assertEquals(1, executions.size)
+
+        executions = cmd.execute(pricing(98), Instant.now())
+        assertEquals(0, executions.size)
+
+        executions = cmd.execute(pricing(105.1), Instant.now())
+        assertEquals(1, executions.size)
+        assertEquals(OrderStatus.COMPLETED, cmd.state.status)
+    }
+
+    @Test
+    fun `bracket short with profit`() {
+        val entry = MarketOrder(asset, Size(-50), side = Side.ENTER)
+        val profit = LimitOrder(asset, Size(50), 95.0, side = Side.EXIT)
+        val loss = StopOrder(asset, Size(50), 105.0, side = Side.EXIT)
+        val order = BracketOrder(entry, profit, loss)
+        val cmd = BracketOrderHandler(order)
+
+        var executions = cmd.execute(pricing(100), Instant.now())
+        assertEquals(1, executions.size)
+
+        executions = cmd.execute(pricing(102), Instant.now())
+        assertEquals(0, executions.size)
+
+        executions = cmd.execute(pricing(94), Instant.now())
+        assertEquals(1, executions.size)
+        assertEquals(OrderStatus.COMPLETED, cmd.state.status)
+    }
 
 }
