@@ -50,12 +50,13 @@ import kotlin.math.min
  * @constructor Create new Default Policy
  */
 open class DefaultPolicy(
+    recording: Boolean = false,
     private val minAmount: Double = 5000.0,
     private val maxAmount: Double = 20_000.0,
     private val shorting: Boolean = false,
     private val increasePosition: Boolean = false,
     private val oneOrderPerAsset: Boolean = true,
-) : BasePolicy() {
+) : BasePolicy(recording = recording) {
 
     private val logger = Logging.getLogger(DefaultPolicy::class)
     private val noOrder: Pair<Order?, Double> = Pair(null, 0.0)
