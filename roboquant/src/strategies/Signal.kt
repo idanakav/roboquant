@@ -59,6 +59,7 @@ enum class SignalType {
  * @property asset The asset for which this rating applies
  * @property rating The rating for the asset
  * @property type The type of signal, entry, exit or both. [SignalType.BOTH] is the default
+ * @property entryPrice The entry price, if set the signal will use it to set a limit order for the entry.
  * @property takeProfit An optional take profit price in the same currency as the asset
  * @property stopLoss An (optional) stop loss price in the same currency as the asset
  * @property probability Optional the probability (value between 0.0 and 1.0) that the rating is correct.
@@ -69,6 +70,7 @@ class Signal(
     val asset: Asset,
     val rating: Rating,
     val type: SignalType = SignalType.BOTH,
+    val entryPrice: Double = Double.NaN,
     val takeProfit: Double = Double.NaN,
     val stopLoss: Double = Double.NaN,
     val probability: Double = Double.NaN,
