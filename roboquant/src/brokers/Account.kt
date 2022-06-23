@@ -20,6 +20,7 @@ import org.apache.commons.math3.stat.descriptive.rank.Percentile
 import org.roboquant.common.*
 import org.roboquant.orders.OrderState
 import java.time.Instant
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.absoluteValue
 
@@ -131,6 +132,7 @@ class Account(
         s.add("trades", trades.size)
         s.add("open orders", openOrders.size)
         s.add("closed orders", closedOrders.size)
+        s.add("win rate", "%${trades.winRate}")
         return s
     }
 
@@ -219,6 +221,17 @@ val Collection<Trade>.realizedPNL
 val Collection<Trade>.timeframe
     get() = timeline.timeframe
 
+val Collection<Trade>.exitTrades
+    get() = filter { it.pnl.value.nonzero }
+
+val Collection<Trade>.losers
+    get() = exitTrades.filter { it.pnl.value < 0 }
+
+val Collection<Trade>.winners
+    get() = exitTrades - losers.toSet()
+
+val Collection<Trade>.winRate
+    get() = if(exitTrades.isEmpty()) 0.0 else (winners.size / exitTrades.size.toDouble() * 100).round(2)
 
 
 /**
@@ -298,7 +311,7 @@ fun Collection<Trade>.summary(name: String = "trades"): Summary {
         s.add("EMPTY")
     } else {
         val trades = sortedBy { it.time }
-        val fmt = "%24s│%10s│%11s│%14s│%14s│%14s│%12s│"
+        val fmt = "%50s│%10s│%11s│%14s│%14s│%14s│%12s│"
         val header = String.format(fmt, "time", "asset", "qty", "cost", "fee", "p&l", "price")
         s.add(header)
         trades.forEach {
@@ -307,7 +320,7 @@ fun Collection<Trade>.summary(name: String = "trades"): Summary {
                 val fee = fee.formatValue()
                 val pnl = pnl.formatValue()
                 val price = Amount(asset.currency, price).formatValue()
-                val t = time.truncatedTo(ChronoUnit.SECONDS)
+                val t = time.truncatedTo(ChronoUnit.SECONDS).atZone(ZoneId.systemDefault())
                 val line = String.format(fmt, t, asset.symbol, size, cost, fee, pnl, price)
                 s.add(line)
             }
