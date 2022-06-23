@@ -35,7 +35,7 @@ internal class ChartTest {
     fun test() {
         val f = RandomWalk.lastYears(1, 1, generateBars = true)
         val asset = f.assets.first()
-        val chart = PriceBarChart(f, asset)
+        val chart = PriceBarChart(FeedChartDataProvider(f), asset)
         assertTrue(chart.asHTML().isNotBlank())
         assertEquals(700, chart.height)
         assertContains(chart.asHTML(), asset.symbol)

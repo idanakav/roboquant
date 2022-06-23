@@ -18,10 +18,7 @@
 
 package org.roboquant.jupyter
 
-import com.google.gson.GsonBuilder
-import com.google.gson.JsonElement
-import com.google.gson.JsonSerializationContext
-import com.google.gson.JsonSerializer
+import com.google.gson.*
 import org.roboquant.common.Amount
 import java.lang.reflect.Type
 import java.time.Instant
@@ -102,6 +99,32 @@ private class TripleAdapter : JsonSerializer<Triple<*, *, *>> {
 }
 
 /**
+ * Type adaptor for Gson that allows to use Amount that get serialized as a big decimal
+ *
+ * @constructor Create new Pair adapter
+ */
+private class IndicatorAdapter : JsonSerializer<PriceBarChart.Indicator> {
+
+    override fun serialize(
+        jsonElement: PriceBarChart.Indicator,
+        type: Type,
+        jsonSerializationContext: JsonSerializationContext
+    ): JsonElement {
+        return JsonObject().apply {
+            addProperty("name", jsonElement.name)
+            addProperty("type", "line")
+            addProperty("smooth", true)
+            addProperty("showSymbol", false)
+            add("lineStyle", JsonObject().apply {
+                addProperty("width", 1)
+            })
+            add("data", jsonSerializationContext.serialize(jsonElement.values))
+        }
+    }
+
+}
+
+/**
  * Base class for ECharts based charts
  *
  * @constructor Create empty E chart
@@ -137,6 +160,7 @@ abstract class Chart : Output() {
             gsonBuilder.registerTypeAdapter(Triple::class.java, TripleAdapter())
             gsonBuilder.registerTypeAdapter(Instant::class.java, InstantAdapter())
             gsonBuilder.registerTypeAdapter(Amount::class.java, AmountAdapter())
+            gsonBuilder.registerTypeAdapter(PriceBarChart.Indicator::class.java, IndicatorAdapter())
         }
 
     }
@@ -144,10 +168,10 @@ abstract class Chart : Output() {
     /**
      * Reduce the sample size in order to ensure the browser can still plot it.
      */
-    protected fun <T>reduce(data: Collection<T>): Collection<T> {
+    protected fun <T> reduce(data: Collection<T>): Collection<T> {
         return if (data.size > maxSamples) {
             val skip = data.size / maxSamples
-            data.filterIndexed {  index, _ -> index % skip == 1 }
+            data.filterIndexed { index, _ -> index % skip == 1 }
         } else {
             data
         }
@@ -182,13 +206,17 @@ abstract class Chart : Output() {
                 call_echarts(fn)        
             })()
         </script>
+         ${renderCustomData()}
         """.trimIndent()
     }
 
 
     override fun asHTMLPage(): String {
         val fragment = asHTML()
-        val script = """<script src='https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js'></script>"""
+        val script = """
+            <script src='https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js'></script>
+            <script src="https://cdn.tailwindcss.com"></script>
+            """.trimIndent()
 
         return """
         <html>
@@ -207,6 +235,10 @@ abstract class Chart : Output() {
             </body>
         </html>
         """.trimIndent()
+    }
+
+    protected open fun renderCustomData(): String {
+        return ""
     }
 
     @Suppress("FunctionOnlyReturningConstant")
